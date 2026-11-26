@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Inventory Knapsack Dashboard</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<style>
+  :root { --bg:#f4f6fb; --card:#fff; --text:#1f2937; --muted:#6b7280; --blue:#2563eb; --green:#059669; --line:#e5e7eb; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#0f172a; --card:#1e293b; --text:#e5e7eb; --muted:#94a3b8; --line:#334155; }
+  }
+  * { box-sizing: border-box; }
+  body { margin:0; font-family: system-ui, Arial, sans-serif; background:var(--bg); color:var(--text); }
+  header { padding:20px 28px; background:var(--blue); color:#fff; }
+  header h1 { margin:0; font-size:22px; }
+  header p { margin:4px 0 0; opacity:.85; font-size:14px; }
+  main { max-width:1100px; margin:20px auto; padding:0 16px; display:grid; gap:16px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:18px; }
+  .card h2 { margin:0 0 12px; font-size:17px; }
+  .grid2 { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+  @media (max-width:760px) { .grid2 { grid-template-columns:1fr; } }
+  table { width:100%; border-collapse:collapse; font-size:14px; }
+  th, td { text-align:left; padding:7px 6px; border-bottom:1px solid var(--line); }
+  input { padding:7px; border:1px solid var(--line); border-radius:6px; background:var(--bg); color:var(--text); width:100%; }
+  button { padding:9px 16px; border:0; border-radius:8px; background:var(--blue); color:#fff; cursor:pointer; font-size:14px; }
+  button.light { background:var(--line); color:var(--text); }
+  button.red { background:#dc2626; padding:5px 10px; }
+  .row { display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-top:12px; }
+  .stat { font-size:30px; font-weight:700; }
+  .muted { color:var(--muted); font-size:13px; }
+  .g { color:var(--blue); } .d { color:var(--green); }
+  #msg { color:#dc2626; font-size:14px; min-height:18px; }
+  .chartbox { position:relative; height:260px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Inventory Management Dashboard</h1>
+  <p>Knapsack Optimization: Greedy (Fractional) vs Dynamic Programming (0/1)</p>
+</header>
+
+<main>
+  <section class="card">
+    <h2>1. Inventory and Storage Capacity</h2>
+    <table>
+      <thead><tr><th>Product</th><th>Weight</th><th>Profit</th><th></th></tr></thead>
+      <tbody id="rows"></tbody>
+    </table>
+    <div class="row">
+      <button class="light" onclick="addRow('', '', '')">+ Add product</button>
+      <label>Capacity: <input id="cap" type="number" value="15" style="width:90px"></label>
+      <button onclick="solve()">Run Both Algorithms</button>
+      <span id="msg"></span>
+    </div>
+  </section>
+
+  <section class="grid2">
+    <div class="card">
+      <h2 class="g">Greedy (Fractional Knapsack)</h2>
+      <div class="stat g" id="gProfit">-</div>
+      <div class="muted" id="gTime">Total profit</div>
+      <table><thead><tr><th>Product</th><th>Weight used</th><th>Fraction</th></tr></thead><tbody id="gSel"></tbody></table>
+    </div>
+    <div class="card">
+      <h2 class="d">Dynamic Programming (0/1 Knapsack)</h2>
+      <div class="stat d" id="dProfit">-</div>
+      <div class="muted" id="dTime">Total profit</div>
+      <table><thead><tr><th>Product</th><th>Weight used</th><th>Fraction</th></tr></thead><tbody id="dSel"></tbody></table>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>2. Profit Comparison</h2>
+    <div class="chartbox"><canvas id="profitChart"></canvas></div>
+    <p class="muted">Greedy ka profit DP se zyada ya barabar hota hai, kyunki Greedy item ko tod sakta hai.</p>
+  </section>
+
+  <section class="card">
+    <h2>3. Performance Comparison (alag-alag size)</h2>
+    <button onclick="perf()">Run Performance Test</button>
+    <div class="chartbox" style="margin-top:12px"><canvas id="perfChart"></canvas></div>
+    <table style="margin-top:12px">
+      <thead><tr><th>Items</th><th>Greedy time (s)</th><th>DP time (s)</th><th>Greedy profit</th><th>DP profit</th></tr></thead>
+      <tbody id="perfRows"></tbody>
+    </table>
+  </section>
+
+  <section class="card">
+    <h2>Complexity</h2>
+    <table>
+      <tr><th>Algorithm</th><th>Time</th><th>Space</th></tr>
+      <tr><td>Fractional Knapsack (Greedy)</td><td>O(n log n)</td><td>O(n)</td></tr>
+      <tr><td>0/1 Knapsack (DP)</td><td>O(n x W)</td><td>O(n x W)</td></tr>
+    </table>
+  </section>
+</main>
+
+<script>
+const sample = [["Laptop",10,60],["Mobile",3,40],["Headphones",2,25],["Tablet",5,45],["Smart Watch",1,20],["Speaker",6,30]];
+let profitChart, perfChart;
+
+function addRow(n, w, p) {
+  const tr = document.createElement("tr");
+  tr.innerHTML = `<td><input value="${n}" placeholder="Name"></td>
+                  <td><input type="number" value="${w}" placeholder="Weight"></td>
+                  <td><input type="number" value="${p}" placeholder="Profit"></td>
+                  <td><button class="red" onclick="this.closest('tr').remove()">x</button></td>`;
+  document.getElementById("rows").appendChild(tr);
+}
+
+function getItems() {
+  return [...document.querySelectorAll("#rows tr")].map(tr => {
+    const v = tr.querySelectorAll("input");
+    return { name: v[0].value || "Item", weight: v[1].value, profit: v[2].value };
+  });
+}
+
+function fillSel(id, list) {
+  document.getElementById(id).innerHTML = list.map(s =>
+    `<tr><td>${s.name}</td><td>${s.weight}</td><td>${s.fraction}</td></tr>`).join("");
+}
+
+async function solve() {
+  document.getElementById("msg").textContent = "";
+  const res = await fetch("/api/solve", {
+    method: "POST", headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({ items: getItems(), capacity: document.getElementById("cap").value })
+  });
+  const data = await res.json();
+  if (!res.ok) { document.getElementById("msg").textContent = data.error; return; }
+
+  document.getElementById("gProfit").textContent = data.greedy.profit;
+  document.getElementById("dProfit").textContent = data.dp.profit;
+  document.getElementById("gTime").textContent = "Total profit | time: " + data.greedy.time.toFixed(6) + " s";
+  document.getElementById("dTime").textContent = "Total profit | time: " + data.dp.time.toFixed(6) + " s";
+  fillSel("gSel", data.greedy.selected);
+  fillSel("dSel", data.dp.selected);
+
+  if (profitChart) profitChart.destroy();
+  profitChart = new Chart(document.getElementById("profitChart"), {
+    type: "bar",
+    data: { labels: ["Greedy (Fractional)", "DP (0/1)"],
+            datasets: [{ label: "Total Profit", data: [data.greedy.profit, data.dp.profit],
+                         backgroundColor: ["#2563eb", "#059669"] }] },
+    options: { maintainAspectRatio: false, plugins: { legend: { display: false } } }
+  });
+}
+
+async function perf() {
+  const rows = await (await fetch("/api/performance")).json();
+  document.getElementById("perfRows").innerHTML = rows.map(r =>
+    `<tr><td>${r.items}</td><td>${r.greedy_time.toFixed(6)}</td><td>${r.dp_time.toFixed(6)}</td>
+     <td>${r.greedy_profit}</td><td>${r.dp_profit}</td></tr>`).join("");
+  if (perfChart) perfChart.destroy();
+  perfChart = new Chart(document.getElementById("perfChart"), {
+    type: "line",
+    data: { labels: rows.map(r => r.items),
+            datasets: [
+              { label: "Greedy time (s)", data: rows.map(r => r.greedy_time), borderColor: "#2563eb" },
+              { label: "DP time (s)", data: rows.map(r => r.dp_time), borderColor: "#059669" } ] },
+    options: { maintainAspectRatio: false,
+               scales: { x: { title: { display: true, text: "Number of items" } },
+                         y: { title: { display: true, text: "Time (seconds)" } } } }
+  });
+}
+
+sample.forEach(s => addRow(...s));
+solve();
+</script>
+</body>
+</html>
